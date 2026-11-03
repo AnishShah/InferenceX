@@ -118,20 +118,6 @@ base:
       AIPERF_HTTP_X_DYNAMO_SESSION_ID_FROM_CORRELATION_ID: 'true'
       AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'sglang:'
       AIPERF_EXTRA_INPUTS: '{"chat_template_kwargs":{"enable_thinking":true},"temperature":1,"top_p":0.95}'
-  services:
-  - name: etcd
-    type: etcd
-    placement:
-      node: infra
-  - name: nats
-    type: nats
-    placement:
-      node: infra
-    options:
-      max_payload_mb: 64
-  - name: otel-collector
-    type: otel-collector
-    enabled: false
   sbatch_directives:
     mem: '0'
     cpus-per-task: '144'

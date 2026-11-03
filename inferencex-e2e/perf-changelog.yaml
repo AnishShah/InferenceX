@@ -11891,5 +11891,5 @@
   scenario-type:
     - agentic-coding
   description:
-    - "Add GLM-5.2-NVFP4 GB200 AgentX disaggregated P/D points behind the llm-d router (llm-d-router v1.0.0 EPP with turn-priority program-aware fairness and flow control at 2P1D/3P1D, and pd-sidecar NIXL P/D routing across 1P6D/1P4D TP4 and 1P2D/1P1D/2P1D/3P1D DEP8/DEP16 topologies)."
+    - "Add GLM-5.2-NVFP4 GB200 AgentX disaggregated P/D points behind the llm-d router (llm-d-router v1.0.0 EPP with turn-priority program-aware fairness and flow control at 2P1D/3P1D, and pd-sidecar NIXL P/D routing across 1P6D/1P4D TP4 and 1P2D/1P1D/2P1D/3P1D DEP8/DEP16 topologies); apply runners/srt-slurm/patches/llm-d-sglang.patch to support SGLang workers under frontend.type: llm-d with --kv-connector=sglang and SGLANG_BOOTSTRAP_PORT=7200."
   pr-link: XXX
