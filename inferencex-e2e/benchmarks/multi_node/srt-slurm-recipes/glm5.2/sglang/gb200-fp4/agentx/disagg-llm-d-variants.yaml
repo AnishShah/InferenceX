@@ -1,0 +1,772 @@
+schema: 2
+base:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg
+  identity:
+    model: {}
+    container: {}
+    frameworks:
+      llm-d-router: 1.0.0
+      sglang: 0.0.0.dev1+gab580b2e0
+  resources:
+    gpu_type: gb200
+    gpus_per_node: 4
+  dynamo:
+    install: false
+  observability:
+    tachometer:
+      enabled: false
+  frontend:
+    type: llm-d
+    enable_multiple_frontends: false
+  engine: sglang
+  roles:
+    prefill:
+      nodes: 2
+      workers: 1
+      gpus: 8
+      env:
+        TORCH_DISTRIBUTED_DEFAULT_TIMEOUT: '1800'
+        PYTHONUNBUFFERED: '1'
+        SGLANG_TIMEOUT_KEEP_ALIVE: '900'
+        SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE: '100000'
+        SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT: '100000'
+        SGLANG_DISAGGREGATION_WAITING_TIMEOUT: '100000'
+        SGLANG_USE_MESSAGE_QUEUE_BROADCASTER: '0'
+        SGLANG_MOONCAKE_CUSTOM_MEM_POOL: 'True'
+        MC_FORCE_MNNVL: '1'
+        NCCL_MNNVL_ENABLE: '1'
+        NCCL_CUMEM_ENABLE: '1'
+        NVSHMEM_REMOTE_TRANSPORT: none
+        UCX_TLS: cuda_copy,cuda_ipc,sm,self,tcp
+        UCX_CUDA_IPC_ENABLE_MNNVL: y
+        SGLANG_PP_LAYER_PARTITION: 10,10,10,10,10,10,10,8
+      args:
+        served-model-name: nvidia/GLM-5.2-NVFP4
+        trust-remote-code: true
+        watchdog-timeout: 1000000
+        quantization: modelopt_fp4
+        kv-cache-dtype: fp8_e4m3
+        disaggregation-transfer-backend: nixl
+        tensor-parallel-size: 1
+        pipeline-parallel-size: 8
+        chunked-prefill-size: 8192
+        max-prefill-tokens: 8192
+        max-running-requests: 64
+        disable-cuda-graph: true
+        moe-runner-backend: flashinfer_cutedsl
+        fp4-gemm-backend: flashinfer_cutedsl
+        weight-loader-prefetch-checkpoints: true
+        model-loader-extra-config: '{"enable_multithread_load":true}'
+        mem-fraction-static: 0.93
+        context-length: 1048576
+        enable-hierarchical-cache: true
+        hicache-size: 160
+        hicache-write-policy: write_back
+        hicache-io-backend: direct
+        speculative-algorithm: EAGLE
+        speculative-moe-runner-backend: flashinfer_trtllm
+        speculative-num-steps: 5
+        speculative-eagle-topk: 1
+        speculative-num-draft-tokens: 6
+        enable-metrics: true
+        enable-cache-report: true
+        enable-request-time-stats-logging: true
+    decode:
+      env:
+        TORCH_DISTRIBUTED_DEFAULT_TIMEOUT: '1800'
+        PYTHONUNBUFFERED: '1'
+        SGLANG_TIMEOUT_KEEP_ALIVE: '900'
+        SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE: '100000'
+        SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT: '100000'
+        SGLANG_DISAGGREGATION_WAITING_TIMEOUT: '100000'
+        SGLANG_USE_MESSAGE_QUEUE_BROADCASTER: '0'
+        SGLANG_CLIP_MAX_NEW_TOKENS_ESTIMATION: '8'
+        SGLANG_MOONCAKE_CUSTOM_MEM_POOL: 'True'
+        MC_FORCE_MNNVL: '1'
+        NCCL_MNNVL_ENABLE: '1'
+        NCCL_CUMEM_ENABLE: '1'
+        NVSHMEM_REMOTE_TRANSPORT: none
+        UCX_TLS: cuda_copy,cuda_ipc,sm,self,tcp
+        UCX_CUDA_IPC_ENABLE_MNNVL: y
+      args:
+        served-model-name: nvidia/GLM-5.2-NVFP4
+        trust-remote-code: true
+        watchdog-timeout: 1000000
+        quantization: modelopt_fp4
+        kv-cache-dtype: fp8_e4m3
+        disaggregation-transfer-backend: nixl
+        speculative-algorithm: EAGLE
+        speculative-num-steps: 5
+        speculative-eagle-topk: 1
+        speculative-num-draft-tokens: 6
+        chunked-prefill-size: 64
+        context-length: 1048576
+        fp4-gemm-backend: flashinfer_cutedsl
+        skip-tokenizer-init: true
+        stream-interval: 30
+        weight-loader-prefetch-checkpoints: true
+        disaggregation-decode-extra-slots: 0
+        router-decode-active-request-weight: '8192'
+        enable-metrics: true
+        enable-cache-report: true
+        enable-request-time-stats-logging: true
+  health_check:
+    max_attempts: 1440
+    interval_seconds: 10
+  benchmark:
+    env:
+      AIPERF_HTTP_X_DYNAMO_SESSION_ID_FROM_CORRELATION_ID: 'true'
+      AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'sglang:'
+      AIPERF_EXTRA_INPUTS: '{"chat_template_kwargs":{"enable_thinking":true},"temperature":1,"top_p":0.95}'
+  services:
+  - name: etcd
+    type: etcd
+    placement:
+      node: infra
+  - name: nats
+    type: nats
+    placement:
+      node: infra
+    options:
+      max_payload_mb: 64
+  - name: otel-collector
+    type: otel-collector
+    enabled: false
+  sbatch_directives:
+    mem: '0'
+    cpus-per-task: '144'
+  srun_options:
+    mem: '0'
+    container-remap-root: ''
+override_1p6d_pp8_tp4_c36:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg-1p6d-pp8-tp4-c36
+  frontend:
+    epp_config:
+      apiVersion: llm-d.ai/v1
+      dataLayer:
+        injectDefaults: false
+      plugins:
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
+      - type: outlen-bucket
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: false
+          blockSizeTokens: 64
+          maxPrefixTokensToMatch: 0
+          maxPrefixBlocksToMatch: 0
+          lruCapacityPerServer: 524288
+      - type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 1024
+      - type: prefix-cache-scorer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+      - type: active-request-scorer
+        parameters:
+          inFlightLoadProducerName: inflight-load-producer
+      - name: decode-kv-token-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 3500000
+          inFlightLoadProducerName: inflight-load-producer
+      - type: max-score-picker
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: active-request-scorer
+          weight: 120
+        - pluginRef: decode-kv-token-scorer
+          weight: 60
+        - pluginRef: prefix-cache-scorer
+          weight: 10
+        - pluginRef: max-score-picker
+  roles:
+    prefill:
+      args: {}
+    decode:
+      nodes: 6
+      workers: 6
+      gpus: 4
+      args:
+        tensor-parallel-size: 4
+        disaggregation-decode-enable-radix-cache: true
+        mem-fraction-static: 0.94
+        max-running-requests: 24
+        cuda-graph-max-bs-decode: 24
+override_1p4d_pp8_tp4_c48:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg-1p4d-pp8-tp4-c48
+  frontend:
+    epp_config:
+      apiVersion: llm-d.ai/v1
+      dataLayer:
+        injectDefaults: false
+      plugins:
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
+      - type: outlen-bucket
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: false
+          blockSizeTokens: 64
+          maxPrefixTokensToMatch: 0
+          maxPrefixBlocksToMatch: 0
+          lruCapacityPerServer: 524288
+      - type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 1024
+      - type: prefix-cache-scorer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+      - type: active-request-scorer
+        parameters:
+          inFlightLoadProducerName: inflight-load-producer
+      - name: decode-kv-token-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 3500000
+          inFlightLoadProducerName: inflight-load-producer
+      - type: max-score-picker
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: active-request-scorer
+          weight: 120
+        - pluginRef: decode-kv-token-scorer
+          weight: 60
+        - pluginRef: prefix-cache-scorer
+          weight: 36
+        - pluginRef: max-score-picker
+  roles:
+    prefill:
+      args:
+        mem-fraction-static: 0.83
+    decode:
+      nodes: 4
+      workers: 4
+      gpus: 4
+      args:
+        tensor-parallel-size: 4
+        disaggregation-decode-enable-radix-cache: true
+        mem-fraction-static: 0.94
+        max-running-requests: 24
+        cuda-graph-max-bs-decode: 24
+override_1p2d_pp8_dep8_c64:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg-1p2d-pp8-dep8-c64
+  frontend:
+    epp_config:
+      apiVersion: llm-d.ai/v1
+      dataLayer:
+        injectDefaults: false
+      plugins:
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
+      - type: outlen-bucket
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: false
+          blockSizeTokens: 64
+          maxPrefixTokensToMatch: 64
+          maxPrefixBlocksToMatch: 1
+          lruCapacityPerServer: 1
+      - type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: none
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 1024
+      - type: active-request-scorer
+        parameters:
+          inFlightLoadProducerName: inflight-load-producer
+      - name: decode-kv-token-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 2621440
+          inFlightLoadProducerName: inflight-load-producer
+      - type: max-score-picker
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: active-request-scorer
+          weight: 100
+        - pluginRef: decode-kv-token-scorer
+          weight: 90
+        - pluginRef: max-score-picker
+  roles:
+    decode:
+      nodes: 4
+      workers: 2
+      gpus: 8
+      args:
+        tensor-parallel-size: 8
+        data-parallel-size: 8
+        expert-parallel-size: 8
+        enable-dp-attention: true
+        moe-a2a-backend: flashinfer
+        moe-runner-backend: flashinfer_trtllm
+        speculative-moe-a2a-backend: none
+        speculative-moe-runner-backend: flashinfer_trtllm
+        disable-radix-cache: true
+        mem-fraction-static: 0.9
+        max-running-requests: 256
+        cuda-graph-max-bs-decode: 32
+override_1p2d_pp8_dep8_c96:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg-1p2d-pp8-dep8-c96
+  frontend:
+    epp_config:
+      apiVersion: llm-d.ai/v1
+      dataLayer:
+        injectDefaults: false
+      plugins:
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
+      - name: decode-active-cap
+        type: utilization-filter
+        parameters:
+          fallbackOnEmpty: true
+          inFlightLoadProducerName: inflight-load-producer
+          conditions:
+          - metric: active-requests
+            maxValue: 6
+      - type: outlen-bucket
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: false
+          blockSizeTokens: 64
+          maxPrefixTokensToMatch: 64
+          maxPrefixBlocksToMatch: 1
+          lruCapacityPerServer: 1
+      - type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: none
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 4096
+      - type: active-request-scorer
+        parameters:
+          inFlightLoadProducerName: inflight-load-producer
+      - name: decode-kv-token-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 1600000
+          inFlightLoadProducerName: inflight-load-producer
+      - type: max-score-picker
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: decode-active-cap
+        - pluginRef: active-request-scorer
+          weight: 72
+        - pluginRef: decode-kv-token-scorer
+          weight: 100
+        - pluginRef: max-score-picker
+  roles:
+    prefill:
+      args:
+        mem-fraction-static: 0.83
+    decode:
+      nodes: 4
+      workers: 2
+      gpus: 8
+      args:
+        tensor-parallel-size: 8
+        data-parallel-size: 8
+        expert-parallel-size: 8
+        enable-dp-attention: true
+        moe-a2a-backend: flashinfer
+        moe-runner-backend: flashinfer_trtllm
+        speculative-moe-a2a-backend: none
+        speculative-moe-runner-backend: flashinfer_trtllm
+        disable-radix-cache: true
+        mem-fraction-static: 0.9
+        max-running-requests: 256
+        cuda-graph-max-bs-decode: 32
+override_1p1d_pp8_dep8_c96:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg-1p1d-pp8-dep8-c96
+  frontend:
+    epp_config:
+      apiVersion: llm-d.ai/v1
+      dataLayer:
+        injectDefaults: false
+      plugins:
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
+      - type: outlen-bucket
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: false
+          blockSizeTokens: 64
+          maxPrefixTokensToMatch: 64
+          maxPrefixBlocksToMatch: 1
+          lruCapacityPerServer: 1
+      - type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: none
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 1024
+      - type: active-request-scorer
+        parameters:
+          inFlightLoadProducerName: inflight-load-producer
+      - name: decode-kv-token-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 3282176
+          inFlightLoadProducerName: inflight-load-producer
+      - type: max-score-picker
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: active-request-scorer
+          weight: 50
+        - pluginRef: decode-kv-token-scorer
+          weight: 100
+        - pluginRef: max-score-picker
+  roles:
+    prefill:
+      args:
+        mem-fraction-static: 0.83
+        max-running-requests: 16
+        hicache-size: 100
+    decode:
+      nodes: 2
+      workers: 1
+      gpus: 8
+      args:
+        tensor-parallel-size: 8
+        data-parallel-size: 8
+        expert-parallel-size: 8
+        enable-dp-attention: true
+        moe-a2a-backend: flashinfer
+        moe-runner-backend: flashinfer_trtllm
+        speculative-moe-a2a-backend: none
+        speculative-moe-runner-backend: flashinfer_trtllm
+        disable-radix-cache: true
+        mem-fraction-static: 0.9
+        max-running-requests: 256
+        cuda-graph-max-bs-decode: 32
+override_2p1d_pp8_dep16_c224:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg-2p1d-pp8-dep16-c224
+  frontend:
+    epp_config:
+      apiVersion: llm-d.ai/v1
+      featureGates:
+      - flowControl
+      dataLayer:
+        injectDefaults: false
+      plugins:
+      - type: agent-identity
+        parameters:
+          additionalSessionHeaders:
+          - x-session-id
+          - x-correlation-id
+      - type: program-aware-fairness
+        parameters:
+          strategy: turn-priority
+          turnPriorityTimeWeight: 12.0
+          turnPriorityInactivitySeconds: 120
+          evictionTtlSeconds: 75
+          evictionSweepSeconds: 10
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
+      - type: outlen-bucket
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: false
+          blockSizeTokens: 64
+          maxPrefixTokensToMatch: 0
+          maxPrefixBlocksToMatch: 0
+          lruCapacityPerServer: 524288
+      - type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 1024
+      - name: decode-load-producer
+        type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: no-prefix-discount
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 1024
+      - name: prefill-concurrency
+        type: concurrency-detector
+        parameters:
+          concurrencyMode: requests
+          maxConcurrency: 28
+          headroom: 1.0
+          inFlightLoadProducerName: inflight-load-producer
+      - name: prefill-saturation
+        type: max-saturation-detector
+        parameters:
+          detectors:
+          - prefill-concurrency
+          stages:
+            prefill-concurrency:
+            - prefill
+      - type: prefix-cache-scorer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+      - type: active-request-scorer
+      - name: token-load-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 393216
+          inFlightLoadProducerName: inflight-load-producer
+      - name: decode-kv-token-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 2621440
+          inFlightLoadProducerName: decode-load-producer
+      - type: max-score-picker
+      - name: session-affinity-prefill
+        type: session-affinity-scorer
+        parameters:
+          strategy: session_id
+          profileName: prefill
+          sessionIdConfig:
+            sources:
+            - header: x-session-id
+            - header: x-correlation-id
+            evictionTtlSeconds: 3600
+      flowControl:
+        defaultRequestTTL: 0s
+        noEndpointRequestTTL: 0s
+        saturationDetector:
+          pluginRef: prefill-saturation
+        defaultPriorityBand:
+          maxRequests: 10k
+          maxBytes: 50Gi
+          fairnessPolicyRef: program-aware-fairness
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: token-load-scorer
+          weight: 24
+        - pluginRef: active-request-scorer
+          weight: 16
+        - pluginRef: prefix-cache-scorer
+          weight: 45
+        - pluginRef: session-affinity-prefill
+          weight: 65
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: active-request-scorer
+          weight: 50
+        - pluginRef: decode-kv-token-scorer
+          weight: 120
+        - pluginRef: max-score-picker
+  roles:
+    prefill:
+      nodes: 4
+      workers: 2
+    decode:
+      nodes: 4
+      workers: 1
+      gpus: 16
+      args:
+        tensor-parallel-size: 16
+        data-parallel-size: 16
+        expert-parallel-size: 16
+        enable-dp-attention: true
+        moe-a2a-backend: flashinfer
+        moe-runner-backend: flashinfer_trtllm
+        speculative-moe-a2a-backend: none
+        speculative-moe-runner-backend: flashinfer_trtllm
+        disable-radix-cache: true
+        mem-fraction-static: 0.94
+        max-running-requests: 512
+        cuda-graph-max-bs-decode: 32
+override_3p1d_pp8_dep16_c336:
+  name: glm5.2-fp4-gb200-llmd-sglang-agentx-disagg-3p1d-pp8-dep16-c336
+  frontend:
+    epp_config:
+      apiVersion: llm-d.ai/v1
+      featureGates:
+      - flowControl
+      dataLayer:
+        injectDefaults: false
+      plugins:
+      - type: agent-identity
+        parameters:
+          additionalSessionHeaders:
+          - x-session-id
+          - x-correlation-id
+      - type: program-aware-fairness
+        parameters:
+          strategy: turn-priority
+          turnPriorityTimeWeight: 12.0
+          turnPriorityInactivitySeconds: 120
+          evictionTtlSeconds: 75
+          evictionSweepSeconds: 10
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
+      - type: outlen-bucket
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: false
+          blockSizeTokens: 64
+          maxPrefixTokensToMatch: 0
+          maxPrefixBlocksToMatch: 0
+          lruCapacityPerServer: 524288
+      - type: inflight-load-producer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+          addEstimatedOutputTokens: true
+          maxEstimatedOutputTokens: 1024
+      - name: prefill-concurrency
+        type: concurrency-detector
+        parameters:
+          concurrencyMode: requests
+          maxConcurrency: 28
+          headroom: 1.0
+          inFlightLoadProducerName: inflight-load-producer
+      - name: prefill-saturation
+        type: max-saturation-detector
+        parameters:
+          detectors:
+          - prefill-concurrency
+          stages:
+            prefill-concurrency:
+            - prefill
+      - type: prefix-cache-scorer
+        parameters:
+          prefixMatchInfoProducerName: approx-prefix-cache-producer
+      - type: active-request-scorer
+        parameters:
+          inFlightLoadProducerName: inflight-load-producer
+      - name: token-load-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 393216
+          inFlightLoadProducerName: inflight-load-producer
+      - name: decode-kv-token-scorer
+        type: token-load-scorer
+        parameters:
+          queueThresholdTokens: 2621440
+          inFlightLoadProducerName: inflight-load-producer
+      - type: max-score-picker
+      - name: session-affinity-prefill
+        type: session-affinity-scorer
+        parameters:
+          strategy: session_id
+          profileName: prefill
+          sessionIdConfig:
+            sources:
+            - header: x-session-id
+            - header: x-correlation-id
+            evictionTtlSeconds: 3600
+      flowControl:
+        defaultRequestTTL: 0s
+        noEndpointRequestTTL: 0s
+        saturationDetector:
+          pluginRef: prefill-saturation
+        defaultPriorityBand:
+          maxRequests: 10k
+          maxBytes: 50Gi
+          fairnessPolicyRef: program-aware-fairness
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: token-load-scorer
+          weight: 26
+        - pluginRef: active-request-scorer
+          weight: 18
+        - pluginRef: prefix-cache-scorer
+          weight: 45
+        - pluginRef: session-affinity-prefill
+          weight: 65
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: active-request-scorer
+          weight: 85
+        - pluginRef: decode-kv-token-scorer
+          weight: 100
+        - pluginRef: max-score-picker
+  roles:
+    prefill:
+      nodes: 6
+      workers: 3
+    decode:
+      nodes: 4
+      workers: 1
+      gpus: 16
+      args:
+        tensor-parallel-size: 16
+        data-parallel-size: 16
+        expert-parallel-size: 16
+        enable-dp-attention: true
+        moe-a2a-backend: flashinfer
+        moe-runner-backend: flashinfer_trtllm
+        speculative-moe-a2a-backend: none
+        speculative-moe-runner-backend: flashinfer_trtllm
+        disable-radix-cache: true
+        mem-fraction-static: 0.94
+        max-running-requests: 512
+        cuda-graph-max-bs-decode: 32

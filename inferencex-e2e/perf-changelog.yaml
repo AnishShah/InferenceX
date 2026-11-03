@@ -11885,3 +11885,11 @@
     - "The monokernel reads the FP8 and MXFP4 weights in place, keeps per-token FP8 activations for the W8A8 projections and runs the MoE on BF16 activations (a16w4), where the default path quantizes them to MXFP4. c1-c8 also set SGLANG_USE_AITER=1, which the monokernel requires and the image already sets, so they get their own GSM8K eval at c8."
     - "Every point now serves the model's default thinking-on chat template: the recipe no longer passes --default-chat-template-kwargs '{\"enable_thinking\": false}', so the served mode matches the thinking_on golden AL (2.32 at 3 draft tokens) and the other qwen3.8next recipes."
   pr-link: https://github.com/SemiAnalysisAI/InferenceX/pull/4542
+
+- config-keys:
+    - glm5.2-fp4-gb200-llmd-sglang-agentic-disagg
+  scenario-type:
+    - agentic-coding
+  description:
+    - "Add GLM-5.2-NVFP4 GB200 AgentX disaggregated P/D points behind the llm-d router (llm-d-router v1.0.0 EPP with turn-priority program-aware fairness and flow control at 2P1D/3P1D, and pd-sidecar NIXL P/D routing across 1P6D/1P4D TP4 and 1P2D/1P1D/2P1D/3P1D DEP8/DEP16 topologies)."
+  pr-link: XXX
